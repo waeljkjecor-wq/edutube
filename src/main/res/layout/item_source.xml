@@ -17,29 +17,20 @@
         android:padding="14dp">
 
         <TextView
-            android:id="@+id/letter"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:background="@drawable/bg_circle"
-            android:gravity="center"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
             android:id="@+id/name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:ellipsize="end"
-            android:maxLines="2"
+            android:maxLines="3"
             android:textColor="@color/ink"
-            android:textSize="14sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/sub"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:textColor="@color/muted"
             android:textSize="12sp" />
     </LinearLayout>

@@ -8,6 +8,7 @@ import android.os.Message
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -69,7 +70,7 @@ class PlayerActivity : AppCompatActivity() {
 
         sourceKey = intent.getStringExtra("source_key").orEmpty()
         val source = store.source(sourceKey)
-        findViewById<TextView>(R.id.sourceTitle).text = source?.title ?: getString(R.string.app_name)
+        findViewById<TextView>(R.id.sourceTitle).text = source?.display ?: getString(R.string.app_name)
 
         findViewById<View>(R.id.btnBack).setOnClickListener { finish() }
         findViewById<View>(R.id.btnFullscreen).setOnClickListener { setOwnFullscreen(true) }
@@ -112,6 +113,11 @@ class PlayerActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(true)
             setSupportZoom(false)
+        }
+        // السماح لمشغّل يوتيوب بحفظ ملفات تعريف الارتباط حتى يتذكّر التحقق ولا يطلب «لست روبوتاً» كل مرة
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(web, true)
         }
         web.setBackgroundColor(0xFF000000.toInt())
         web.isLongClickable = false
@@ -177,7 +183,7 @@ class PlayerActivity : AppCompatActivity() {
         val source = store.source(sourceKey)
         val all = when {
             source == null -> emptyList()
-            source.type == SourceType.VIDEO -> store.sources().filter { it.type == SourceType.VIDEO }.map { Video(it.id, it.title) }
+            source.type == SourceType.VIDEO -> store.sources().filter { it.type == SourceType.VIDEO }.map { Video(it.id, it.display) }
             else -> store.cachedVideos(sourceKey)
         }
         val others = all.filter { it.id != v.id }
@@ -200,11 +206,12 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun onPlayerError(code: Int) {
         errorText.text = when (code) {
-            101, 150, 152, 153 -> "صاحب هذا الفيديو لا يسمح بتشغيله خارج يوتيوب. اطلب من المعلم استبداله."
+            101, 150, 152, 153 -> "تعذّر تشغيل الفيديو. إن ظهرت رسالة «تسجيل الدخول» فأطفئ VPN أو بدّل الشبكة، ثم اضغط هنا لإعادة المحاولة. وإن استمر فقد يكون صاحب الفيديو منع تشغيله خارج يوتيوب."
             100 -> "هذا الفيديو محذوف أو خاص."
             else -> "تعذّر تشغيل الفيديو (رمز $code). تحقق من الإنترنت."
         }
         errorText.visibility = View.VISIBLE
+        errorText.setOnClickListener { current?.let { play(it) } }
     }
 
     inner class Bridge {
@@ -307,7 +314,7 @@ html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hid
     player = new YT.Player('p', {
       width: '100%', height: '100%',
       videoId: '$videoId',
-      host: 'https://www.youtube-nocookie.com',
+      host: 'https://www.youtube.com',
       playerVars: {
         autoplay: 1, playsinline: 1, rel: 0, fs: 1,
         modestbranding: 1, iv_load_policy: 3, disablekb: 0,

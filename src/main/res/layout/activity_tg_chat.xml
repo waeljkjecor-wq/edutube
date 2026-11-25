@@ -102,6 +102,7 @@
     </FrameLayout>
 
     <TextView
+        android:id="@+id/readOnly"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/white"
@@ -114,4 +115,55 @@
         android:textColor="@color/muted"
         android:textSize="13sp"
         android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/composer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:gravity="bottom"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btnAttach"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="إرفاق صورة أو فيديو أو ملف"
+            android:src="@drawable/ic_file"
+            app:tint="@color/muted" />
+
+        <EditText
+            android:id="@+id/msgInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search"
+            android:backgroundTint="#EEF0F6"
+            android:hint="اكتب رسالة…"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="5"
+            android:minHeight="44dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted"
+            android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/btnSend"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_badge"
+            android:backgroundTint="@color/primary"
+            android:contentDescription="إرسال"
+            android:scaleX="-1"
+            android:src="@drawable/ic_send"
+            app:tint="@color/white" />
+    </LinearLayout>
 </LinearLayout>

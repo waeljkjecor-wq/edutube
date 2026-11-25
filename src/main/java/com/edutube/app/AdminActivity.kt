@@ -58,7 +58,16 @@ class AdminActivity : AppCompatActivity() {
         updateHint()
         btnAdd.setOnClickListener { addSource() }
 
-        sourcesAdapter = AdminSourceAdapter { s -> confirmDelete(s) }
+        sourcesAdapter = AdminSourceAdapter(
+            onEdit = { s ->
+                askName(this, "الاسم الظاهر للطالب", s.name, s.title) { name ->
+                    store.renameSource(s.key, name)
+                    refreshSources()
+                    toast(if (name.isBlank()) "عاد الاسم الأصلي" else "تم تغيير الاسم")
+                }
+            },
+            onDelete = { s -> confirmDelete(s) }
+        )
         findViewById<RecyclerView>(R.id.adminSources).apply {
             layoutManager = LinearLayoutManager(this@AdminActivity)
             adapter = sourcesAdapter
@@ -226,6 +235,7 @@ class AdminActivity : AppCompatActivity() {
             val row = layoutInflater.inflate(R.layout.item_admin_source, box, false)
             row.findViewById<TextView>(R.id.tag).text = "واتساب"
             row.findViewById<TextView>(R.id.name).text = w.name
+            row.findViewById<View>(R.id.btnEdit).visibility = View.GONE
             row.findViewById<View>(R.id.btnDelete).setOnClickListener {
                 store.saveWaLinks(store.waLinks().filterIndexed { j, _ -> j != i })
                 renderWa()
@@ -270,11 +280,14 @@ class AdminActivity : AppCompatActivity() {
             val result = runCatching { YouTube.resolve(type, text, store.apiKey) }
             btnAdd.isEnabled = true
             progress.visibility = View.GONE
-            result.onSuccess { s ->
+            result.onSuccess { found ->
+                val custom = findViewById<TextInputEditText>(R.id.customName).text?.toString()?.trim().orEmpty()
+                val s = if (custom.isNotEmpty()) found.copy(name = custom) else found
                 store.addSource(s)
                 input.setText("")
+                findViewById<TextInputEditText>(R.id.customName).setText("")
                 refreshSources()
-                toast("أُضيف: ${s.title}")
+                toast("أُضيف: ${s.display}")
                 if (s.type != SourceType.VIDEO) {
                     launch { runCatching { Repo.refresh(store, s) } }
                 }
@@ -287,7 +300,7 @@ class AdminActivity : AppCompatActivity() {
 
     private fun confirmDelete(s: Source) {
         MaterialAlertDialogBuilder(this)
-            .setTitle("حذف «${s.title}»؟")
+            .setTitle("حذف «${s.display}»؟")
             .setMessage("لن يظهر هذا المحتوى للطالب بعد الآن.")
             .setPositiveButton("حذف") { _, _ ->
                 store.removeSource(s.key)
@@ -326,7 +339,7 @@ class AdminActivity : AppCompatActivity() {
                 setPadding(0, dp(8), 0, dp(8))
             }
             row.addView(TextView(this).apply {
-                text = st.title
+                text = store.videoName(st.id) ?: st.title
                 maxLines = 2
                 setTextColor(ContextCompat.getColor(this@AdminActivity, R.color.ink))
                 textSize = 13.5f

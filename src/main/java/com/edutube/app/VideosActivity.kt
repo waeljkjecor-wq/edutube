@@ -31,7 +31,7 @@ class VideosActivity : AppCompatActivity() {
         source = s
 
         findViewById<MaterialToolbar>(R.id.toolbar).apply {
-            title = source.title
+            title = source.display
             subtitle = source.type.label
             setSubtitleTextColor(0xFFE6E9FB.toInt())
             setNavigationOnClickListener { finish() }
@@ -45,6 +45,17 @@ class VideosActivity : AppCompatActivity() {
             adapter = this@VideosActivity.adapter
         }
         swipe.setOnRefreshListener { load() }
+
+        // ضغطة مطوّلة على درس = تغيير اسمه (للمشرف فقط)
+        adapter.onLongClick = { v ->
+            Pin.requireAdmin(this, store) {
+                askName(this, "اسم الدرس", store.videoName(v.id) ?: "", v.title) { name ->
+                    store.setVideoName(v.id, name)
+                    adapter.submit(store.cachedVideos(source.key), store.watchCounts())
+                    toast(if (name.isBlank()) "عاد الاسم الأصلي" else "تم تغيير الاسم")
+                }
+            }
+        }
 
         val cached = store.cachedVideos(source.key)
         adapter.submit(cached, store.watchCounts())

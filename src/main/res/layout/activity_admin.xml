@@ -100,6 +100,21 @@
                     android:textColor="@color/muted"
                     android:textSize="12sp" />
 
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:hint="اسم يظهر للطالب (اختياري): رياضيات – الفصل الأول">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/customName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAdd"
                     android:layout_width="match_parent"
@@ -140,6 +155,14 @@
                     android:id="@+id/adminSources"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="6dp"
+                    android:text="✏️ لتغيير اسم قائمة أو قناة. ولتغيير اسم درس داخل قائمة: افتح القائمة من الشاشة الرئيسية واضغط مطوّلاً على الدرس."
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/adminEmpty"

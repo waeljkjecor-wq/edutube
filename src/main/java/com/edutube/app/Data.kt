@@ -31,7 +31,8 @@ data class Period(
 
 data class WaLink(val name: String, val link: String)
 
-data class TgChat(val id: Long, val title: String)
+/** محادثة تيليجرام مسموحة. write = يُسمح للطالب بالكتابة فيها. */
+data class TgChat(val id: Long, val title: String, val write: Boolean = false)
 
 val REMINDER_OPTIONS = listOf(
     "w" to "قبل أسبوع",
@@ -198,14 +199,14 @@ fun Store.tgChats(): List<TgChat> {
     val out = mutableListOf<TgChat>()
     for (i in 0 until a.length()) {
         val o = a.optJSONObject(i) ?: continue
-        out.add(TgChat(o.optLong("id"), o.optString("title")))
+        out.add(TgChat(o.optLong("id"), o.optString("title"), o.optBoolean("write", false)))
     }
     return out
 }
 
 fun Store.saveTgChats(list: List<TgChat>) {
     val a = JSONArray()
-    list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title)) }
+    list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("write", it.write)) }
     putRaw("tg_chats", a.toString())
 }
 

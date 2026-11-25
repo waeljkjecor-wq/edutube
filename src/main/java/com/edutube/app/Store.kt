@@ -10,8 +10,11 @@ enum class SourceType(val label: String) {
     VIDEO("فيديو")
 }
 
-data class Source(val type: SourceType, val id: String, val title: String) {
+data class Source(val type: SourceType, val id: String, val title: String, val name: String = "") {
     val key: String get() = "${type.name}:$id"
+
+    /** الاسم الظاهر للطالب: الاسم المخصص إن وُجد، وإلا عنوان يوتيوب. */
+    val display: String get() = name.ifBlank { title }
 }
 
 data class Video(
@@ -75,7 +78,7 @@ class Store(context: Context) {
             val type = runCatching { SourceType.valueOf(o.getString("type")) }.getOrNull() ?: continue
             val id = o.optString("id")
             if (id.isEmpty()) continue
-            out.add(Source(type, id, o.optString("title", id)))
+            out.add(Source(type, id, o.optString("title", id), o.optString("name")))
         }
         return out
     }
@@ -85,13 +88,18 @@ class Store(context: Context) {
     private fun saveSources(list: List<Source>) {
         val arr = JSONArray()
         list.forEach {
-            arr.put(JSONObject().put("type", it.type.name).put("id", it.id).put("title", it.title))
+            arr.put(JSONObject().put("type", it.type.name).put("id", it.id).put("title", it.title).put("name", it.name))
         }
         p.edit().putString("sources", arr.toString()).apply()
     }
 
     fun addSource(s: Source) {
         saveSources(sources().filter { it.key != s.key } + s)
+    }
+
+    /** تغيير الاسم الظاهر (فارغ = العودة لعنوان يوتيوب). */
+    fun renameSource(key: String, name: String) {
+        saveSources(sources().map { if (it.key == key) it.copy(name = name.trim()) else it })
     }
 
     fun removeSource(key: String) {
@@ -101,7 +109,30 @@ class Store(context: Context) {
 
     // ---------- ذاكرة الفيديوهات ----------
 
-    fun cachedVideos(key: String): List<Video> {
+    // ---------- أسماء مخصصة للدروس ----------
+
+    private fun videoNamesJson(): JSONObject =
+        runCatching { JSONObject(p.getString("video_names", "{}") ?: "{}") }.getOrElse { JSONObject() }
+
+    fun videoName(id: String): String? = videoNamesJson().optString(id, "").ifBlank { null }
+
+    /** فارغ = العودة لعنوان يوتيوب. */
+    fun setVideoName(id: String, name: String) {
+        val o = videoNamesJson()
+        if (name.isBlank()) o.remove(id) else o.put(id, name.trim())
+        p.edit().putString("video_names", o.toString()).apply()
+    }
+
+    /** يطبّق الأسماء المخصصة على قائمة دروس. */
+    fun named(list: List<Video>): List<Video> {
+        val o = videoNamesJson()
+        if (o.length() == 0) return list
+        return list.map { v -> o.optString(v.id, "").ifBlank { null }?.let { v.copy(title = it) } ?: v }
+    }
+
+    fun cachedVideos(key: String): List<Video> = named(rawCachedVideos(key))
+
+    private fun rawCachedVideos(key: String): List<Video> {
         val arr = runCatching { JSONArray(p.getString("videos_$key", "[]")) }.getOrElse { JSONArray() }
         val out = mutableListOf<Video>()
         for (i in 0 until arr.length()) {
@@ -130,7 +161,7 @@ class Store(context: Context) {
 
     /** فيديوهات مصدر معيّن: الفيديو المفرد يعيد نفسه. */
     fun videosOf(s: Source): List<Video> =
-        if (s.type == SourceType.VIDEO) listOf(Video(s.id, s.title)) else cachedVideos(s.key)
+        if (s.type == SourceType.VIDEO) listOf(Video(s.id, s.display)) else cachedVideos(s.key)
 
     // ---------- عدّاد المشاهدات عبر التطبيق ----------
 
@@ -183,7 +214,8 @@ class Store(context: Context) {
         val s = p.getString("last", null) ?: return null
         return runCatching {
             val o = JSONObject(s)
-            Video(o.getString("id"), o.optString("title")) to o.getString("key")
+            val id = o.getString("id")
+            Video(id, videoName(id) ?: o.optString("title")) to o.getString("key")
         }.getOrNull()
     }
 }

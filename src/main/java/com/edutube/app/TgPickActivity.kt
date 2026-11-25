@@ -12,12 +12,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 
 /** المشرف يختار المجموعات والقنوات المسموحة من حساب الطالب. */
 class TgPickActivity : AppCompatActivity() {
     private lateinit var store: Store
-    private val selected = LinkedHashMap<Long, String>()
+    private val selected = LinkedHashMap<Long, TgChat>()
     private var items: List<TgChatInfo> = emptyList()
     private val adapter = PickAdapter()
 
@@ -25,7 +26,7 @@ class TgPickActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_tg_pick)
         store = Store(this)
-        store.tgChats().forEach { selected[it.id] = it.title }
+        store.tgChats().forEach { selected[it.id] = it }
 
         findViewById<MaterialToolbar>(R.id.toolbar).setNavigationOnClickListener { finish() }
         findViewById<RecyclerView>(R.id.list).apply {
@@ -33,7 +34,7 @@ class TgPickActivity : AppCompatActivity() {
             adapter = this@TgPickActivity.adapter
         }
         findViewById<View>(R.id.btnSave).setOnClickListener {
-            store.saveTgChats(selected.map { TgChat(it.key, it.value) })
+            store.saveTgChats(selected.values.toList())
             toast("تم الحفظ: ${selected.size}")
             finish()
         }
@@ -60,6 +61,7 @@ class TgPickActivity : AppCompatActivity() {
             val name: TextView = v.findViewById(R.id.name)
             val kind: TextView = v.findViewById(R.id.kind)
             val check: CheckBox = v.findViewById(R.id.check)
+            val writeToggle: MaterialButton = v.findViewById(R.id.writeToggle)
         }
 
         override fun getItemCount() = items.size
@@ -75,10 +77,22 @@ class TgPickActivity : AppCompatActivity() {
             h.letter.setTextColor(fg)
             h.name.text = c.title
             h.kind.text = c.kind
-            h.check.isChecked = c.id in selected
+            val sel = selected[c.id]
+            h.check.isChecked = sel != null
             h.itemView.setOnClickListener {
-                if (c.id in selected) selected.remove(c.id) else selected[c.id] = c.title
+                if (c.id in selected) selected.remove(c.id) else selected[c.id] = TgChat(c.id, c.title, false)
                 notifyItemChanged(h.bindingAdapterPosition)
+            }
+            // القنوات لا يكتب فيها إلا أصحابها، فلا خيار كتابة لها
+            if (sel == null || c.kind == "قناة") {
+                h.writeToggle.visibility = View.GONE
+            } else {
+                h.writeToggle.visibility = View.VISIBLE
+                h.writeToggle.text = if (sel.write) "✍️ قراءة وكتابة" else "👁️ قراءة فقط"
+                h.writeToggle.setOnClickListener {
+                    selected[c.id] = sel.copy(write = !sel.write)
+                    notifyItemChanged(h.bindingAdapterPosition)
+                }
             }
         }
     }

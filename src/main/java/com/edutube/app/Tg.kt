@@ -20,7 +20,18 @@ import dev.g000sha256.tdl.dto.AuthorizationStateWaitTdlibParameters
 import dev.g000sha256.tdl.dto.Chat
 import dev.g000sha256.tdl.dto.ChatListMain
 import dev.g000sha256.tdl.dto.ChatTypeBasicGroup
+import dev.g000sha256.tdl.dto.ChatTypePrivate
 import dev.g000sha256.tdl.dto.ChatTypeSupergroup
+import dev.g000sha256.tdl.dto.FormattedText
+import dev.g000sha256.tdl.dto.InputDocument
+import dev.g000sha256.tdl.dto.InputFileLocal
+import dev.g000sha256.tdl.dto.InputMessageContent
+import dev.g000sha256.tdl.dto.InputMessageDocument
+import dev.g000sha256.tdl.dto.InputMessagePhoto
+import dev.g000sha256.tdl.dto.InputMessageText
+import dev.g000sha256.tdl.dto.InputMessageVideo
+import dev.g000sha256.tdl.dto.InputPhoto
+import dev.g000sha256.tdl.dto.InputVideo
 import dev.g000sha256.tdl.dto.Message
 import dev.g000sha256.tdl.dto.MessageAnimation
 import dev.g000sha256.tdl.dto.MessageAudio
@@ -85,7 +96,8 @@ data class TgItem(
     val size: Long,
     val thumbFileId: Int,
     val duration: Int,
-    val isPdf: Boolean
+    val isPdf: Boolean,
+    val outgoing: Boolean = false
 )
 
 /** اتصال واحد بتيليجرام لكل التطبيق. */
@@ -237,12 +249,13 @@ object Tg {
         val kind = when (val t = ch.type) {
             is ChatTypeSupergroup -> if (t.isChannel) "قناة" else "مجموعة"
             is ChatTypeBasicGroup -> "مجموعة"
+            is ChatTypePrivate -> "محادثة خاصة"
             else -> "محادثة"
         }
         return TgChatInfo(ch.id, ch.title, kind, preview(ch.lastMessage), ch.lastMessage?.date ?: 0, ch.unreadCount)
     }
 
-    /** كل المجموعات والقنوات في حساب الطالب (للمشرف فقط). */
+    /** كل المجموعات والقنوات والمحادثات الخاصة في حساب الطالب (للمشرف فقط). */
     suspend fun groupsAndChannels(): List<TgChatInfo> {
         val c = cl()
         for (i in 0 until 10) {
@@ -252,7 +265,11 @@ object Tg {
         val out = mutableListOf<TgChatInfo>()
         for (id in ids) {
             val ch = c.getChat(chatId = id).orNull() ?: continue
-            if (ch.type is ChatTypeSupergroup || ch.type is ChatTypeBasicGroup) out.add(info(ch))
+            val t = ch.type
+            // محادثة «Telegram» الرسمية (777000) فيها رموز الدخول، فلا تُعرض أبداً
+            val allowedType = t is ChatTypeSupergroup || t is ChatTypeBasicGroup ||
+                (t is ChatTypePrivate && t.userId != 777000L)
+            if (allowedType) out.add(info(ch))
         }
         return out
     }
@@ -277,6 +294,48 @@ object Tg {
             from = ms.last().id
         }
         return out.values.toList()
+    }
+
+    /** هل تسمح تيليجرام نفسها للطالب بالكتابة في هذه المحادثة؟ */
+    suspend fun canWrite(chatId: Long): Boolean {
+        val ch = cl().getChat(chatId = chatId).orNull() ?: return false
+        return when (val t = ch.type) {
+            is ChatTypePrivate -> true
+            is ChatTypeSupergroup -> !t.isChannel && ch.permissions.canSendBasicMessages
+            is ChatTypeBasicGroup -> ch.permissions.canSendBasicMessages
+            else -> false
+        }
+    }
+
+    private suspend fun send(chatId: Long, content: InputMessageContent) {
+        cl().sendMessage(chatId = chatId, inputMessageContent = content).ok()
+    }
+
+    suspend fun sendText(chatId: Long, text: String) {
+        send(chatId, InputMessageText(text = FormattedText(text, emptyArray()), linkPreviewOptions = null, clearDraft = true))
+    }
+
+    /** kind: photo أو video أو أي شيء آخر = ملف. */
+    suspend fun sendFile(chatId: Long, path: String, kind: String) {
+        val file = InputFileLocal(path)
+        val content: InputMessageContent = when (kind) {
+            "photo" -> InputMessagePhoto(
+                photo = InputPhoto(photo = file, thumbnail = null, video = null, addedStickerFileIds = IntArray(0), width = 0, height = 0),
+                caption = null, showCaptionAboveMedia = false, selfDestructType = null, hasSpoiler = false
+            )
+            "video" -> InputMessageVideo(
+                video = InputVideo(
+                    video = file, thumbnail = null, cover = null, startTimestamp = 0, addedStickerFileIds = IntArray(0),
+                    duration = 0, width = 0, height = 0, supportsStreaming = true
+                ),
+                caption = null, showCaptionAboveMedia = false, selfDestructType = null, hasSpoiler = false
+            )
+            else -> InputMessageDocument(
+                document = InputDocument(document = file, thumbnail = null, disableContentTypeDetection = false),
+                caption = null
+            )
+        }
+        send(chatId, content)
     }
 
     suspend fun pinned(chatId: Long): Message? = cl().getChatPinnedMessage(chatId = chatId).orNull()
@@ -305,7 +364,9 @@ object Tg {
         return if (f.local.isDownloadingCompleted && f.local.path.isNotEmpty()) f.local.path else null
     }
 
-    fun toItem(m: Message): TgItem {
+    fun toItem(m: Message): TgItem = baseItem(m).copy(outgoing = m.isOutgoing)
+
+    private fun baseItem(m: Message): TgItem {
         return when (val ct = m.content) {
             is MessageText -> TgItem(m.id, m.date, TgKind.TEXT, ct.text.text, 0, "", 0L, 0, 0, false)
             is MessagePhoto -> {

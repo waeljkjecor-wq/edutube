@@ -4,24 +4,34 @@ import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.media.MediaPlayer
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.MimeTypeMap
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -41,6 +51,13 @@ class TgChatActivity : AppCompatActivity() {
     private var player: MediaPlayer? = null
     private var playingId = 0L
     private var opened = false
+
+    private val pickMedia = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) sendUri(uri, forceDocument = false)
+    }
+    private val pickDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) sendUri(uri, forceDocument = true)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +96,8 @@ class TgChatActivity : AppCompatActivity() {
             }
             Tg.open(chatId)
             opened = true
+            val tgAllows = runCatching { Tg.canWrite(chatId) }.getOrDefault(false)
+            setupComposer(allowed.write, tgAllows)
             loadInitial()
             loadPinned()
             Tg.newMessages.collect { m ->
@@ -92,6 +111,83 @@ class TgChatActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // ---------- الكتابة والإرسال ----------
+
+    private fun setupComposer(allowedByAdmin: Boolean, allowedByTelegram: Boolean) {
+        val readOnly = findViewById<TextView>(R.id.readOnly)
+        val composer = findViewById<View>(R.id.composer)
+        if (allowedByAdmin && allowedByTelegram) {
+            readOnly.visibility = View.GONE
+            composer.visibility = View.VISIBLE
+            findViewById<MaterialToolbar>(R.id.toolbar).subtitle = "قراءة وكتابة"
+            val input = findViewById<EditText>(R.id.msgInput)
+            findViewById<View>(R.id.btnSend).setOnClickListener {
+                val text = input.text.toString().trim()
+                if (text.isEmpty()) return@setOnClickListener
+                input.setText("")
+                lifecycleScope.launch {
+                    runCatching { Tg.sendText(chatId, text) }.onFailure {
+                        input.setText(text)
+                        toast("تعذّر الإرسال، تحقق من الاتصال")
+                    }
+                }
+            }
+            findViewById<View>(R.id.btnAttach).setOnClickListener { chooseAttachment() }
+        } else {
+            composer.visibility = View.GONE
+            readOnly.visibility = View.VISIBLE
+            readOnly.text = if (allowedByAdmin) "الكتابة متاحة لمشرفي المجموعة فقط" else "للقراءة فقط"
+        }
+    }
+
+    private fun chooseAttachment() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("إرسال")
+            .setItems(arrayOf("صورة أو فيديو", "ملف (PDF وغيره)")) { _, which ->
+                try {
+                    if (which == 0) {
+                        pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                    } else {
+                        pickDocument.launch(arrayOf("*/*"))
+                    }
+                } catch (_: Exception) {
+                    toast("تعذّر فتح المعرض. إن كان قفل الشاشة مفعّلاً فقد يمنع ذلك.")
+                }
+            }
+            .show()
+    }
+
+    private fun sendUri(uri: Uri, forceDocument: Boolean) {
+        toast("جارٍ الإرسال…")
+        lifecycleScope.launch {
+            val r = runCatching {
+                val (path, mime) = withContext(Dispatchers.IO) { copyToCache(uri) }
+                val kind = when {
+                    forceDocument -> "document"
+                    mime.startsWith("image/") -> "photo"
+                    mime.startsWith("video/") -> "video"
+                    else -> "document"
+                }
+                Tg.sendFile(chatId, path, kind)
+            }
+            r.onFailure { toast("تعذّر إرسال الملف") }
+        }
+    }
+
+    /** ينسخ الملف المختار إلى ذاكرة التطبيق لأن تيليجرام يحتاج مساراً فعلياً. */
+    private fun copyToCache(uri: Uri): Pair<String, String> {
+        var name = "file"
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0)?.let { name = it }
+        }
+        val safe = name.replace(Regex("[\\/:*?\"<>|]"), "_")
+        val dir = File(cacheDir, "tg_upload").apply { mkdirs() }
+        val out = File(dir, System.currentTimeMillis().toString() + "_" + safe)
+        val input = contentResolver.openInputStream(uri) ?: throw IllegalStateException("no stream")
+        input.use { i -> out.outputStream().use { o -> i.copyTo(o) } }
+        return out.absolutePath to (contentResolver.getType(uri) ?: "")
     }
 
     private suspend fun loadInitial() {
@@ -262,6 +358,7 @@ class TgChatActivity : AppCompatActivity() {
 
     inner class MsgAdapter : RecyclerView.Adapter<MsgAdapter.VH>() {
         inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+            val bubble: View = v.findViewById(R.id.bubble)
             val photo: ImageView = v.findViewById(R.id.photo)
             val videoBox: View = v.findViewById(R.id.videoBox)
             val videoThumb: ImageView = v.findViewById(R.id.videoThumb)
@@ -289,6 +386,19 @@ class TgChatActivity : AppCompatActivity() {
             h.videoBox.visibility = View.GONE
             h.fileRow.visibility = View.GONE
             h.audioRow.visibility = View.GONE
+            // رسائل الطالب على الطرف الآخر وبلون مختلف
+            val lp = h.bubble.layoutParams as ViewGroup.MarginLayoutParams
+            val gap = (40 * resources.displayMetrics.density).toInt()
+            if (it.outgoing) {
+                lp.marginStart = gap
+                lp.marginEnd = 0
+                h.bubble.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this@TgChatActivity, R.color.primary_soft))
+            } else {
+                lp.marginStart = 0
+                lp.marginEnd = gap
+                h.bubble.backgroundTintList = null
+            }
+            h.bubble.layoutParams = lp
             h.photo.clipToOutline = true
             h.videoThumb.clipToOutline = true
 

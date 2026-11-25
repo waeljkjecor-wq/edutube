@@ -35,7 +35,7 @@ fun openPlayer(ctx: Context, video: Video, sourceKey: String) {
 
 fun openSource(ctx: Context, s: Source) {
     if (s.type == SourceType.VIDEO) {
-        openPlayer(ctx, Video(s.id, s.title), s.key)
+        openPlayer(ctx, Video(s.id, s.display), s.key)
     } else {
         ctx.startActivity(Intent(ctx, VideosActivity::class.java).putExtra("source_key", s.key))
     }
@@ -69,6 +69,9 @@ fun bindVideoRow(view: View, v: Video, count: Int) {
 
 class VideoAdapter(private val onClick: (Video) -> Unit) : RecyclerView.Adapter<VideoAdapter.VH>() {
     private var items: List<Video> = emptyList()
+
+    /** ضغطة مطوّلة (تُستخدم لتغيير اسم الدرس بواسطة المشرف). */
+    var onLongClick: ((Video) -> Unit)? = null
     private var counts: Map<String, Int> = emptyMap()
 
     class VH(v: View) : RecyclerView.ViewHolder(v)
@@ -93,6 +96,8 @@ class VideoAdapter(private val onClick: (Video) -> Unit) : RecyclerView.Adapter<
         val v = items[position]
         bindVideoRow(h.itemView, v, counts[v.id] ?: 0)
         h.itemView.setOnClickListener { onClick(v) }
+        val lc = onLongClick
+        if (lc != null) h.itemView.setOnLongClickListener { lc(v); true } else h.itemView.setOnLongClickListener(null)
     }
 }
 
@@ -101,7 +106,6 @@ class SourceAdapter(private val onClick: (Source) -> Unit) : RecyclerView.Adapte
     private var subs: Map<String, String> = emptyMap()
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
-        val letter: TextView = v.findViewById(R.id.letter)
         val name: TextView = v.findViewById(R.id.name)
         val sub: TextView = v.findViewById(R.id.sub)
     }
@@ -119,23 +123,23 @@ class SourceAdapter(private val onClick: (Source) -> Unit) : RecyclerView.Adapte
 
     override fun onBindViewHolder(h: VH, position: Int) {
         val s = items[position]
-        val (bg, fg) = PALETTE[position % PALETTE.size]
-        h.letter.text = s.title.trim().take(1)
-        h.letter.backgroundTintList = ColorStateList.valueOf(Color.parseColor(bg))
-        h.letter.setTextColor(Color.parseColor(fg))
-        h.name.text = s.title
+        h.name.text = s.display
         h.sub.text = subs[s.key] ?: s.type.label
         h.itemView.setOnClickListener { onClick(s) }
     }
 }
 
-class AdminSourceAdapter(private val onDelete: (Source) -> Unit) : RecyclerView.Adapter<AdminSourceAdapter.VH>() {
+class AdminSourceAdapter(
+    private val onEdit: (Source) -> Unit,
+    private val onDelete: (Source) -> Unit
+) : RecyclerView.Adapter<AdminSourceAdapter.VH>() {
     private var items: List<Source> = emptyList()
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val tag: TextView = v.findViewById(R.id.tag)
         val name: TextView = v.findViewById(R.id.name)
         val del: ImageButton = v.findViewById(R.id.btnDelete)
+        val edit: ImageButton = v.findViewById(R.id.btnEdit)
     }
 
     fun submit(list: List<Source>) {
@@ -151,9 +155,35 @@ class AdminSourceAdapter(private val onDelete: (Source) -> Unit) : RecyclerView.
     override fun onBindViewHolder(h: VH, position: Int) {
         val s = items[position]
         h.tag.text = s.type.label
-        h.name.text = s.title
+        h.name.text = if (s.name.isBlank()) s.title else "${s.name}\n(يوتيوب: ${s.title})"
         h.del.setOnClickListener { onDelete(s) }
+        h.edit.setOnClickListener { onEdit(s) }
     }
+}
+
+/** نافذة تغيير الاسم الظاهر. يعيد نصاً فارغاً عند اختيار «الاسم الأصلي». */
+fun askName(activity: Activity, title: String, current: String, original: String, onSave: (String) -> Unit) {
+    val input = EditText(activity).apply {
+        setText(current)
+        setSelection(current.length)
+        hint = original.ifBlank { "اكتب الاسم الذي يظهر للطالب" }
+        maxLines = 3
+    }
+    val box = FrameLayout(activity).apply {
+        val pad = (24 * resources.displayMetrics.density).toInt()
+        setPadding(pad, pad / 2, pad, 0)
+        addView(input)
+    }
+    val dialog = MaterialAlertDialogBuilder(activity)
+        .setTitle(title)
+        .setView(box)
+        .setPositiveButton("حفظ") { _, _ -> onSave(input.text.toString().trim()) }
+        .setNeutralButton("الاسم الأصلي") { _, _ -> onSave("") }
+        .setNegativeButton("إلغاء", null)
+        .create()
+    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+    dialog.show()
+    input.requestFocus()
 }
 
 /** نوافذ رمز PIN. */

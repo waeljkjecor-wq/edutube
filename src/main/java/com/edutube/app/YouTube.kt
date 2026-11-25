@@ -247,6 +247,6 @@ object Repo {
     suspend fun refresh(store: Store, s: Source): List<Video> {
         val list = YouTube.fetchVideos(s, store.apiKey, store.hideShorts)
         store.saveVideos(s.key, list)
-        return list
+        return store.named(list)
     }
 }

@@ -96,7 +96,7 @@ class ScheduleEditActivity : AppCompatActivity() {
         }
 
         val sources = store.sources()
-        val labels = listOf("بدون") + sources.map { it.title + " (" + it.type.label + ")" }
+        val labels = listOf("بدون") + sources.map { it.display + " (" + it.type.label + ")" }
         spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
         val selected = sources.indexOfFirst { it.key == existing?.sourceKey }
         spinner.setSelection(if (selected >= 0) selected + 1 else 0)
