@@ -33,6 +33,9 @@ import dev.g000sha256.tdl.dto.InputMessageVideo
 import dev.g000sha256.tdl.dto.InputPhoto
 import dev.g000sha256.tdl.dto.InputVideo
 import dev.g000sha256.tdl.dto.Message
+import dev.g000sha256.tdl.dto.Proxy
+import dev.g000sha256.tdl.dto.ProxyTypeMtproto
+import dev.g000sha256.tdl.dto.ProxyTypeSocks5
 import dev.g000sha256.tdl.dto.MessageAnimation
 import dev.g000sha256.tdl.dto.MessageAudio
 import dev.g000sha256.tdl.dto.MessageDocument
@@ -205,7 +208,51 @@ object Tg {
         )
         if (r is TdlResult.Failure) {
             _state.value = TgState.Error("قيم api_id أو api_hash غير صحيحة: ${r.message}")
+        } else {
+            applyProxy(c)
         }
+    }
+
+    // ---------- البروكسي ----------
+
+    /** يقرأ رابط بروكسي تيليجرام: tg://proxy?server=..&port=..&secret=.. أو tg://socks?server=..&port=..&user=..&pass=.. */
+    fun parseProxy(link: String): Proxy? {
+        val l = link.trim()
+        if (l.isEmpty()) return null
+        val u = runCatching { android.net.Uri.parse(l) }.getOrNull() ?: return null
+        val server = u.getQueryParameter("server")?.trim().orEmpty()
+        val port = u.getQueryParameter("port")?.trim()?.toIntOrNull() ?: return null
+        if (server.isEmpty()) return null
+        val secret = u.getQueryParameter("secret")?.trim()
+        return if (!secret.isNullOrEmpty()) {
+            Proxy(server = server, port = port, type = ProxyTypeMtproto(secret = secret))
+        } else {
+            Proxy(
+                server = server, port = port,
+                type = ProxyTypeSocks5(username = u.getQueryParameter("user") ?: "", password = u.getQueryParameter("pass") ?: "")
+            )
+        }
+    }
+
+    private suspend fun applyProxy(c: TdlClient) {
+        val ctx = app ?: return
+        c.getProxies().orNull()?.proxies?.forEach { c.removeProxy(proxyId = it.id) }
+        val p = parseProxy(Store(ctx).tgProxy)
+        if (p != null) c.addProxy(proxy = p, enable = true, comment = "دروسي") else c.disableProxy()
+    }
+
+    /** يطبّق البروكسي المحفوظ فوراً (بعد تغييره من لوحة المشرف). */
+    fun reapplyProxy() {
+        val c = synchronized(this) { client } ?: return
+        scope.launch { applyProxy(c) }
+    }
+
+    /** يختبر البروكسي؛ يعيد null عند النجاح أو رسالة الخطأ. */
+    suspend fun testProxy(link: String): String? {
+        val p = parseProxy(link) ?: return "الرابط غير صحيح"
+        val c = synchronized(this) { client } ?: return "احفظ مفاتيح تيليجرام أولاً"
+        val r = c.testProxy(proxy = p, dcId = 2, timeout = 10.0)
+        return if (r is TdlResult.Failure) r.message else null
     }
 
     private fun cl(): TdlClient = synchronized(this) { client } ?: throw TgError("تيليجرام غير متصل")

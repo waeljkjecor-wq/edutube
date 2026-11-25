@@ -164,6 +164,33 @@ class AdminActivity : AppCompatActivity() {
             Tg.restart(this)
             toast("تم حفظ المفاتيح")
         }
+        val proxyInput = findViewById<TextInputEditText>(R.id.tgProxy)
+        proxyInput.setText(store.tgProxy)
+        findViewById<View>(R.id.btnTgSaveProxy).setOnClickListener {
+            val link = proxyInput.text?.toString()?.trim().orEmpty()
+            if (link.isNotEmpty() && Tg.parseProxy(link) == null) {
+                toast("رابط البروكسي غير صحيح. يجب أن يحتوي server و port")
+                return@setOnClickListener
+            }
+            store.tgProxy = link
+            if (link.isEmpty()) {
+                Tg.reapplyProxy()
+                toast("أُلغي البروكسي")
+                return@setOnClickListener
+            }
+            if (!Tg.isConfigured(this)) {
+                toast("حُفظ البروكسي. احفظ مفاتيح تيليجرام ليُستخدم.")
+                return@setOnClickListener
+            }
+            Tg.start(this)
+            toast("جارٍ اختبار البروكسي…")
+            lifecycleScope.launch {
+                val err = Tg.testProxy(link)
+                Tg.reapplyProxy()
+                toast(if (err == null) "✓ البروكسي يعمل وتم تفعيله" else "✗ البروكسي لا يعمل: $err")
+            }
+        }
+
         btnTgLogin.setOnClickListener {
             if (!Tg.isConfigured(this)) {
                 toast("احفظ مفاتيح تيليجرام أولاً (api_id و api_hash)")

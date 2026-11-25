@@ -216,6 +216,13 @@ var Store.tgApiId: Int
         putRaw("tg_api_id", value.toString())
     }
 
+/** رابط بروكسي تيليجرام (tg://proxy أو tg://socks)، فارغ = بدون بروكسي. */
+var Store.tgProxy: String
+    get() = raw("tg_proxy") ?: ""
+    set(value) {
+        putRaw("tg_proxy", value.trim())
+    }
+
 var Store.tgApiHash: String
     get() = raw("tg_api_hash") ?: ""
     set(value) {

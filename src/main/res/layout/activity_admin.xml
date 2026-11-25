@@ -280,6 +280,38 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:text="حفظ مفاتيح تيليجرام" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="بروكسي تيليجرام (عند الحظر): يمرّ تيليجرام وحده عبره، ويبقى يوتيوب مباشراً دون VPN."
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:hint="tg://proxy?server=…&amp;port=…&amp;secret=…">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/tgProxy"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:maxLines="3"
+                        android:textDirection="ltr" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTgSaveProxy"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="حفظ البروكسي واختباره" />
             </LinearLayout>
 
             <!-- واتساب -->
